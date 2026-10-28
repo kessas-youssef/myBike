@@ -59,8 +59,8 @@ Le serveur accepte `MONGODB_URI` ou l’ancienne variable `DB_STRING`. La base u
 
 Au premier démarrage, si aucun administrateur n’existe, le seed crée :
 
-- email : `ADMIN_EMAIL` (par défaut `djo@mybike.dz`)
-- mot de passe : `ADMIN_PASSWORD` (par défaut `admin123`)
+- email : `ADMIN_EMAIL` 
+- mot de passe : `ADMIN_PASSWORD`
 
 **Changez ce mot de passe dans Réglages → Compte administrateur dès la mise en production.**
 
@@ -118,8 +118,6 @@ Ensuite, l’application reste utilisable sans réseau sur le même appareil et 
 ### Limite importante
 
 Un site web **ne peut pas suivre un téléphone en arrière-plan** lorsque l’écran est éteint ou que le navigateur est fermé. Le suivi fonctionne uniquement tant que la page du portail client reste ouverte. Pour un suivi continu, il faudrait une application mobile native avec les permissions « localisation en arrière-plan ». Cette limite est affichée dans l’interface et doit être expliquée au locataire.
-
-Le suivi doit être présenté comme un outil de sécurité et de transparence, avec l’accord du locataire. Vérifiez les obligations locales relatives à la géolocalisation et à la conservation des données personnelles.
 
 ## Pièce d’identité et cautions
 

@@ -20,8 +20,8 @@ async function seedAdmin(db) {
 	const admin = await db.collection('users').findOne({ role: 'admin' });
 	if (admin) return;
 
-	const email = (env.ADMIN_EMAIL || 'djo@mybike.dz').trim().toLowerCase();
-	const password = env.ADMIN_PASSWORD || 'admin123';
+	const email = (env.ADMIN_EMAIL).trim().toLowerCase();
+	const password = env.ADMIN_PASSWORD;
 	const existing = await db
 		.collection('users')
 		.findOne({ email }, { collation: { locale: 'en', strength: 2 } });
