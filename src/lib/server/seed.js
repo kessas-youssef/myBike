@@ -1,43 +1,125 @@
-import { connectDb, getDb } from './db.js';
 import bcrypt from 'bcryptjs';
+import { env } from '$env/dynamic/private';
+import { connectDb } from './db.js';
+import {
+	defaultAccessories,
+	defaultPromotions,
+	defaultSettings,
+	defaultVehicles
+} from '$lib/defaults.js';
+
+const globalKey = '__myBikeSeedPromise';
+const globalState = (globalThis[globalKey] ??= { promise: null });
+
+function withoutId(doc) {
+	const { _id, ...rest } = doc;
+	return rest;
+}
+
+async function seedAdmin(db) {
+	const admin = await db.collection('users').findOne({ role: 'admin' });
+	if (admin) return;
+
+	const email = (env.ADMIN_EMAIL || 'djo@mybike.dz').trim().toLowerCase();
+	const password = env.ADMIN_PASSWORD || 'admin123';
+	const existing = await db
+		.collection('users')
+		.findOne({ email }, { collation: { locale: 'en', strength: 2 } });
+
+	if (existing) {
+		await db
+			.collection('users')
+			.updateOne({ _id: existing._id }, { $set: { role: 'admin', email } });
+		console.log(`[seed] compte existant promu administrateur : ${email}`);
+		return;
+	}
+
+	const hash = await bcrypt.hash(password, 10);
+	await db.collection('users').insertOne({
+		name: 'Djo',
+		email,
+		password: hash,
+		role: 'admin',
+		phone: '',
+		address: '',
+		createdAt: new Date(),
+		updatedAt: new Date()
+	});
+
+	console.log(`[seed] administrateur créé : ${email}`);
+	if (!env.ADMIN_PASSWORD) {
+		console.warn('[seed] mot de passe admin par défaut actif : changez-le dans Réglages.');
+	}
+}
+
+async function seedCollection(db, name, docs) {
+	if (!docs.length) return;
+	const now = new Date();
+	await db.collection(name).bulkWrite(
+		docs.map((doc) => {
+			const { _id, ...data } = doc;
+			return {
+				updateOne: {
+					filter: { _id },
+					update: {
+						$setOnInsert: {
+							...data,
+							createdAt: now,
+							updatedAt: now
+						}
+					},
+					upsert: true
+				}
+			};
+		}),
+		{ ordered: false }
+	);
+}
+
+async function createIndexes(db) {
+	const jobs = [
+		db.collection('users').createIndex({ email: 1 }, { unique: true }),
+		db.collection('users').createIndex({ role: 1 }),
+		db.collection('rentals').createIndex({ clientId: 1 }),
+		db.collection('rentals').createIndex({ status: 1, endTime: 1 }),
+		db.collection('reservations').createIndex({ clientId: 1, status: 1 }),
+		db.collection('repairs').createIndex({ clientId: 1, status: 1 }),
+		db.collection('tracking').createIndex({ rentalId: 1, at: -1 }),
+		db
+			.collection('tracking')
+			.createIndex({ rentalId: 1, pingId: 1 }, { unique: true, sparse: true }),
+		db.collection('promotions').createIndex({ active: 1 }),
+		db.collection('sync_ops').createIndex({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 30 })
+	];
+
+	const results = await Promise.allSettled(jobs);
+	for (const result of results) {
+		if (result.status === 'rejected') {
+			console.warn('[seed] index non créé :', result.reason?.message || result.reason);
+		}
+	}
+}
 
 export async function seedDb() {
-	const db = await connectDb();
+	if (globalState.promise) return globalState.promise;
 
-	const adminExists = await db.collection('users').findOne({ role: 'admin' });
-	if (!adminExists) {
-		const hash = await bcrypt.hash('admin123', 10);
-		await db.collection('users').insertOne({
-			name: 'Djo',
-			email: 'djo@mybike.dz',
-			password: hash,
-			role: 'admin',
-			createdAt: new Date()
-		});
-		console.log('Admin user created (djo@mybike.dz / admin123)');
-	}
+	globalState.promise = (async () => {
+		const db = await connectDb();
+		await seedAdmin(db);
+		await seedCollection(db, 'vehicles', defaultVehicles);
+		await seedCollection(db, 'accessories', defaultAccessories);
+		await seedCollection(db, 'promotions', defaultPromotions);
+		await db.collection('settings').updateOne(
+			{ _id: 'settings' },
+			{ $setOnInsert: { ...withoutId(defaultSettings), createdAt: new Date(), updatedAt: new Date() } },
+			{ upsert: true }
+		);
+		await createIndexes(db);
+		return db;
+	})().catch((error) => {
+		globalState.promise = null;
+		throw error;
+	});
 
-	const vehicleCount = await db.collection('vehicles').countDocuments();
-	if (vehicleCount === 0) {
-		await db.collection('vehicles').insertMany([
-			{ type: 'bike', name: 'VTT Mountain Bike', pricePerHour: 300, stock: 10, available: 10, image: 'https://probike.by/upload/iblock/dc0/2szz093df9kjt5isy1xmfptrriz6r8l5.jpg', description: 'VTT robuste parfait pour la ville et la montagne' },
-			{ type: 'bike', name: 'Vélo de Ville', pricePerHour: 300, stock: 8, available: 8, image: 'https://www.joykiebikes.com/uploads/31490/small/2025-new-classic-city-bike-cruiser-bike-for697ce.png', description: 'Vélo de ville élégant pour vos déplacements quotidiens' },
-			{ type: 'trottinette', name: 'Trottinette Électrique', pricePerHour: 800, stock: 6, available: 6, image: 'https://i.pinimg.com/originals/31/a4/c8/31a4c808f52a60c55760e4ec0aacf6ad.png', description: 'Trottinette électrique puissante, autonomie 25km' }
-		]);
-		console.log('Seed vehicles created');
-	}
-
-	const accessoryCount = await db.collection('accessories').countDocuments();
-	if (accessoryCount === 0) {
-		await db.collection('accessories').insertMany([
-			{ name: 'Casque', price: 1500, stock: 20, category: 'protection' },
-			{ name: 'Gants', price: 800, stock: 15, category: 'protection' },
-			{ name: 'Antivol', price: 2000, stock: 25, category: 'securite' },
-			{ name: 'Lumières LED', price: 1200, stock: 30, category: 'accessoire' },
-			{ name: 'Pompe à vélo', price: 1000, stock: 10, category: 'outil' },
-			{ name: 'Sacoche de guidon', price: 1800, stock: 12, category: 'accessoire' },
-			{ name: 'Huile chaîne', price: 500, stock: 20, category: 'entretien' }
-		]);
-		console.log('Seed accessories created');
-	}
+	return globalState.promise;
 }

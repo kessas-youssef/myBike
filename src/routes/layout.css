@@ -1,3 +1,52 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
+
+:root {
+	--brand: #047857;
+	--accent: #facc15;
+	color-scheme: light;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	-webkit-tap-highlight-color: transparent;
+}
+
+/* Keep native date/time controls readable on iOS. */
+input[type='date'],
+input[type='datetime-local'],
+input[type='time'] {
+	min-height: 2.75rem;
+}
+
+/* Printable rental contract. Everything else is hidden while printing. */
+@media print {
+	body {
+		background: #fff !important;
+	}
+	body * {
+		visibility: hidden !important;
+	}
+	.print-area,
+	.print-area * {
+		visibility: visible !important;
+	}
+	.print-area {
+		position: absolute !important;
+		inset: 0 !important;
+		width: 100% !important;
+		max-width: none !important;
+		margin: 0 !important;
+		padding: 24px !important;
+		background: #fff !important;
+		box-shadow: none !important;
+		border: 0 !important;
+	}
+	.no-print {
+		display: none !important;
+	}
+}

@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
+import { clearSessionCookie } from '$lib/server/auth.js';
 
 export async function POST({ cookies }) {
-	cookies.delete('session', { path: '/' });
+	clearSessionCookie(cookies);
 	return json({ success: true });
 }
